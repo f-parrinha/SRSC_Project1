@@ -15,7 +15,7 @@ import java.util.*;
 public class MChatClient extends JFrame implements MulticastChatEventListener
 {
 	// The "multicast chat" window
-	protected MulticastChat chat;
+	protected SecureMulticastChat chat;		// Changed to use the secure one
 
 	// Txtarea in GUI for chatting/messaging or receiving events in the Chat "room"
 
@@ -174,7 +174,7 @@ public class MChatClient extends JFrame implements MulticastChatEventListener
 
 		
 		// Creates a multicast session (as the chat-messaging room)
-		chat = new MulticastChat(username, group, port, ttl, this);
+		chat = new SecureMulticastChat(username, group, port, ttl, this);	// Changed to use the secure one
 	} 
 
 	protected void log(final String message) {
