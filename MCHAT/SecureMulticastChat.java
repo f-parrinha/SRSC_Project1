@@ -46,9 +46,11 @@ public class SecureMulticastChat extends Thread {
         this.username = username;
         this.group = group;
         this.listener = listener;
-        this.cipherService = new CipherService(CHAT_MAGIC_NUMBER);
+//        this.cipherService = new CipherService(CHAT_MAGIC_NUMBER);
         isActive = true;
 
+        CipherFactory factory = new CipherFactory(CHAT_MAGIC_NUMBER);
+        cipherService = factory.getCipher();
         // create & configure multicast socket
 
         msocket = new MulticastSocket(port);
@@ -60,9 +62,7 @@ public class SecureMulticastChat extends Thread {
         start();
         sendJoin();
 
-        CipherFactory factory = new CipherFactory();
 
-        cipherService = factory.getCipher();
     }
 
     /**

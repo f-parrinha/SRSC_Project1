@@ -19,17 +19,19 @@ public class CipherFactory {
     private String cipherAlgorithm;
     private String hmacAlgorithm;
     private String hashAlgorithm;
+    private Long magicNumber;
 
     /**
      * Reads security.conf file to get security params
      */
 
-    public CipherFactory() {
+    public CipherFactory(Long magicNumber) {
         readSecurityFile();
 
         if (!checkFileReadCorrectly())
             System.out.println(FILE_LOAD_ERROR);
 
+        this.magicNumber = magicNumber;
         cipherAlg = cipherAlgorithm.split("/")[0];
     }
 
@@ -37,9 +39,11 @@ public class CipherFactory {
         CipherService service = null;
         switch (cipherAlg) {
             case AES:
-                service = new CipherAESAlgorithm(hmacKey, cipherKey, iv, cipherAlgorithm, hmacAlgorithm, hashAlgorithm);
+                service = new CipherAESAlgorithm(hmacKey, cipherKey, iv, cipherAlgorithm, hmacAlgorithm, hashAlgorithm, magicNumber);
                 break;
             case BLOWFISH:
+                System.out.println("BLOWFISH");
+                service = new CipherBlowfishAlgorithm(hmacKey, cipherKey, iv, hmacAlgorithm, hashAlgorithm, magicNumber);
                 break;
             case RC4:
                 break;
@@ -54,14 +58,13 @@ public class CipherFactory {
     }
 
     private void readSecurityFile() {
-        System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+
         try (BufferedReader br = new BufferedReader(new FileReader(FILE_PATH))) {
             String line;
 
             // Reads every line
             while ((line = br.readLine()) != null) {
                 String[] parts = line.split(":");
-                System.out.println("line");
                 // Check file validity (only has two sides, if less or more, corrupt)
                 if (parts.length != 2) {
                     return;

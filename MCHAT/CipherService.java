@@ -12,6 +12,8 @@ public abstract class CipherService {
     public final SecureRandom secureRandomGenerator;
     public SecretKey keyCipher;
     public SecretKey keyMac;
+
+    public Mac hmac;
     public String hmacAlgorithm;
     public Cipher cipher;
     public MessageDigest hash;
@@ -21,8 +23,10 @@ public abstract class CipherService {
     }
 
 
-    public abstract byte[] createSecureMessage(long chatMagicNumber, String username, String string) throws
-            NoSuchAlgorithmException, IllegalBlockSizeException, BadPaddingException,
-            InvalidAlgorithmParameterException, InvalidKeyException;
+    public abstract byte[] createSecureMessage(String username, byte[] message) throws IllegalBlockSizeException,
+            BadPaddingException, InvalidAlgorithmParameterException, InvalidKeyException;
+
+    public abstract DataInputStream decryptSecureMessage(DataInputStream stream) throws InvalidAlgorithmParameterException, InvalidKeyException,
+            IllegalBlockSizeException, BadPaddingException, IOException;
 
 }
