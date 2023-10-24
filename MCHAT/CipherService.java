@@ -5,26 +5,34 @@ import java.io.*;
 import java.security.*;
 import java.util.Arrays;
 
-import static java.security.MessageDigest.getInstance;
-
 public class CipherService {
-    private static int VERSION = 1;     // Represents school's work phase
-    private static String FILE_LOAD_ERROR = "ERROR WHILE LOADING SECURITY FILE";
-    private static String FILE_PATH = "./security.conf";
 
-    private String hmacKey;
-    private String cipherKey;
-    private String cipherAlgorithm;
-    private String hmacAlgorithm;
-    private String hashAlgorithm;
+    /** Constants */
+    private static final int VERSION = 1;                   // Represents school's work phase
+    private static final String FILE_LOAD_ERROR = "ERROR WHILE LOADING SECURITY FILE";
+    private static final String FILE_PATH = "./security.conf";
+    private static final short NONCE_SIZE = 16;             // In bytes. In bits is 128
+
+    /** Variables */
+    private final int headerLength;
+    private final byte[] version;
+    private final byte[] magicNumber;
     private final SecureRandom secureRandomGenerator;
     private final SecretKey keyCipher;
     private final SecretKey keyMac;
     private final Cipher cipher;
     private final MessageDigest hash;
     private final Mac hmac;
+    private String hmacKey;
+    private String cipherKey;
+    private String cipherAlgorithm;
+    private String hmacAlgorithm;
+    private String hashAlgorithm;
+    private GCMParameterSpec gcmParam;
+    private int messageNumber;
 
-    public CipherService() throws NoSuchPaddingException, NoSuchAlgorithmException {
+
+    public CipherService(long magicNumber) throws NoSuchPaddingException, NoSuchAlgorithmException {
         // Load security file
         readSecurityFile();
 
@@ -33,37 +41,78 @@ public class CipherService {
         }
 
         // Init variables
-        secureRandomGenerator = new SecureRandom();
-        keyCipher =  new SecretKeySpec(cipherKey.getBytes(), "AES");
-        keyMac = new SecretKeySpec(hmacKey.getBytes(), "HmacSHA256");
-        cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        hash = MessageDigest.getInstance("SHA256");
-        hmac =  Mac.getInstance("HmacSHA256");
+        this.secureRandomGenerator = new SecureRandom();
+        this.keyCipher =  new SecretKeySpec(cipherKey.getBytes(), "AES");
+        this.keyMac = new SecretKeySpec(hmacKey.getBytes(), "HmacSHA256");
+        this.cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        this.hash = MessageDigest.getInstance("SHA256");
+        this.hmac =  Mac.getInstance("HmacSHA256");
+        this.version = Utils.toByteArray(Integer.toString(VERSION));
+        this.magicNumber = Utils.toByteArray(Long.toString(magicNumber));
+        this.headerLength = hash.getDigestLength() + version.length + this.magicNumber.length;
+        this.messageNumber = 1;
     }
 
-    public byte[] createSecureMessage(Long magicNumber, String username, String message) throws IllegalBlockSizeException,
+    public byte[] createSecureMessage(String username, byte[] message) throws IllegalBlockSizeException,
             BadPaddingException, InvalidAlgorithmParameterException, InvalidKeyException {
 
         // Initialization
-        GCMParameterSpec gcmParam = createGcmIvForAes(128, 1, secureRandomGenerator);
+        byte[] nonce = new byte[NONCE_SIZE];
+        secureRandomGenerator.nextBytes(nonce);
+        gcmParam = createGcmIvForAes(128, messageNumber++, secureRandomGenerator);
         cipher.init(Cipher.ENCRYPT_MODE, keyCipher, gcmParam);
         hmac.init(keyMac);
-        byte[] hashedUser = hash.digest(Utils.toByteArray(username));
 
         // Message creation
-        byte[] controlHeader = concatArrays(Utils.toByteArray(Integer.toString(VERSION).concat(Long.toString(magicNumber))), hashedUser);
-        byte[] chatMessagePayload = cipher.doFinal(Utils.toByteArray(secureRandomGenerator.toString().concat(message)));
+        byte[] hashedUser = hash.digest(concatArrays(Utils.toByteArray(username), nonce));
+        byte[] controlHeader = concatArrays(version, magicNumber, hashedUser);
+        byte[] chatMessagePayload = cipher.doFinal(concatArrays(nonce, message));
         byte[] macProof = hmac.doFinal(concatArrays(controlHeader, chatMessagePayload));
+
         return concatArrays(controlHeader, chatMessagePayload, macProof);
     }
 
     /**
-     * TODO
-     * @return
+     * Decrypts a secure message from the current protocol
+     * @param stream stream of data sent on the channel containing the message
+     * @return input stream to read the message data
      */
-    public String decriptSecureMessage() {
+    public DataInputStream decryptSecureMessage(DataInputStream stream) throws InvalidAlgorithmParameterException, InvalidKeyException,
+            IllegalBlockSizeException, BadPaddingException, IOException {
 
+        // Cipher setup
+        cipher.init(Cipher.DECRYPT_MODE, keyCipher, gcmParam);
+        hmac.init(keyMac);
+
+        // Data setup and message division
+        byte[] data = stream.readAllBytes();
+        byte[] header_payload = Arrays.copyOfRange(data, 0, data.length - hmac.getMacLength());
+        byte[] payload = Arrays.copyOfRange(header_payload, headerLength, header_payload.length);
+        byte[] macProof = Arrays.copyOfRange(data, data.length - hmac.getMacLength(), data.length);
+        byte[] hashProof = Arrays.copyOfRange(data, headerLength - hash.getDigestLength() , headerLength);
+
+        // Deciphered payload
+        byte[] deciphered = cipher.doFinal(payload);
+        byte[] nonce = Arrays.copyOfRange(deciphered,0, NONCE_SIZE);
+        byte[] message = Arrays.copyOfRange(deciphered, NONCE_SIZE, deciphered.length);
+        DataInputStream result = new DataInputStream(new ByteArrayInputStream(message));
+
+        // Test MAC proof. Authenticity.
+        if (!macProofTest(macProof, header_payload)) {
+            System.out.println("SECURITY BREACH: MACs ARE NOT THE SAME. DATA HAS BEEN TEMPERED!");
+            return null;
+        }
+
+        // Test replay attack
+        if (!replayAttackTest(result, nonce, hashProof)) {
+            System.out.println("SECURITY BREACH: USER AND NONCE ARE NOT THE SAME. POSSIBLE REPLAY ATTACK");
+            return null;
+        }
+
+        return result;
     }
+
+
 
     /**
      * Creates an IV for a cipher with AES with GCM mode
@@ -156,6 +205,26 @@ public class CipherService {
         }
 
         return length;
+    }
+
+    private Boolean replayAttackTest(DataInputStream result, byte[] nonce, byte[] hashProof) throws IOException {
+        result.skipBytes(12);
+
+        byte[] username = Utils.toByteArray(result.readUTF());
+        byte[] hashTest = hash.digest(concatArrays(username, nonce));
+
+        result.reset();
+        return checkHashMacIsValid(hashTest, hashProof);
+    }
+
+    private Boolean macProofTest(byte[] macProof, byte[] header_payload) {
+        byte[] macTest= hmac.doFinal(header_payload);
+
+        return checkHashMacIsValid(macProof, macTest);
+    }
+
+    private boolean checkHashMacIsValid(byte[] arr1, byte[] arr2) {
+        return Arrays.compare(arr1, arr2) == 0;
     }
 
     private Boolean checkFileReadCorrectly () {
