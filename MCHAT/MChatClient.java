@@ -6,9 +6,13 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.awt.*;
 import java.awt.event.*;
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import javax.swing.*;
 import javax.swing.text.*;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
@@ -169,7 +173,7 @@ public class MChatClient extends JFrame implements MulticastChatEventListener
 	
 	// Multicast address used for the chat-messagig room
 	public void join(String username, InetAddress group, int port, int ttl)
-			throws IOException, NoSuchPaddingException, NoSuchAlgorithmException {
+			throws IOException, NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException, InvalidKeyException {
 		setTitle("CHAT MulticastIP " + username + "@" + group.getHostAddress() 
 				 + ":" + port + " [TTL=" + ttl + "]");
 
