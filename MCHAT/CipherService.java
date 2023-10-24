@@ -5,13 +5,23 @@ import java.io.*;
 import java.security.*;
 import java.util.Arrays;
 
+/**
+ * @author Francisco Parrinha   58360
+ * @author Martin Magdalinchev  58172
+ *
+ * Adds the possibility to cypher and decypher using AES with GCM mode and with no padding
+ *
+ * NTOE: IV is sent through the encrypted payload
+ */
 public class CipherService {
 
     /** Constants */
-    private static final int VERSION = 1;                   // Represents school's work phase
+    private static final int VERSION = 1;
     private static final String FILE_LOAD_ERROR = "ERROR WHILE LOADING SECURITY FILE";
     private static final String FILE_PATH = "./security.conf";
     private static final short NONCE_SIZE = 16;             // In bytes. In bits is 128
+    private static final short TAG_SIZE = 128;              // Bits
+
 
     /** Variables */
     private final int headerLength;
@@ -28,8 +38,6 @@ public class CipherService {
     private String cipherAlgorithm;
     private String hmacAlgorithm;
     private String hashAlgorithm;
-    private GCMParameterSpec gcmParam;
-    private int messageNumber;
 
 
     public CipherService(long magicNumber) throws NoSuchPaddingException, NoSuchAlgorithmException {
@@ -50,7 +58,6 @@ public class CipherService {
         this.version = Utils.toByteArray(Integer.toString(VERSION));
         this.magicNumber = Utils.toByteArray(Long.toString(magicNumber));
         this.headerLength = hash.getDigestLength() + version.length + this.magicNumber.length;
-        this.messageNumber = 1;
     }
 
     public byte[] createSecureMessage(String username, byte[] message) throws IllegalBlockSizeException,
@@ -59,14 +66,13 @@ public class CipherService {
         // Initialization
         byte[] nonce = new byte[NONCE_SIZE];
         secureRandomGenerator.nextBytes(nonce);
-        gcmParam = createGcmIvForAes(128, messageNumber++, secureRandomGenerator);
-        cipher.init(Cipher.ENCRYPT_MODE, keyCipher, gcmParam);
+        cipher.init(Cipher.ENCRYPT_MODE, keyCipher, createGcmIvForAes(nonce));
         hmac.init(keyMac);
 
         // Message creation
         byte[] hashedUser = hash.digest(concatArrays(Utils.toByteArray(username), nonce));
         byte[] controlHeader = concatArrays(version, magicNumber, hashedUser);
-        byte[] chatMessagePayload = cipher.doFinal(concatArrays(nonce, message));
+        byte[] chatMessagePayload = concatArrays(nonce, cipher.doFinal(message));
         byte[] macProof = hmac.doFinal(concatArrays(controlHeader, chatMessagePayload));
 
         return concatArrays(controlHeader, chatMessagePayload, macProof);
@@ -80,21 +86,21 @@ public class CipherService {
     public DataInputStream decryptSecureMessage(DataInputStream stream) throws InvalidAlgorithmParameterException, InvalidKeyException,
             IllegalBlockSizeException, BadPaddingException, IOException {
 
-        // Cipher setup
-        cipher.init(Cipher.DECRYPT_MODE, keyCipher, gcmParam);
-        hmac.init(keyMac);
-
         // Data setup and message division
         byte[] data = stream.readAllBytes();
         byte[] header_payload = Arrays.copyOfRange(data, 0, data.length - hmac.getMacLength());
         byte[] payload = Arrays.copyOfRange(header_payload, headerLength, header_payload.length);
         byte[] macProof = Arrays.copyOfRange(data, data.length - hmac.getMacLength(), data.length);
         byte[] hashProof = Arrays.copyOfRange(data, headerLength - hash.getDigestLength() , headerLength);
+        byte[] nonce = Arrays.copyOfRange(payload,0, NONCE_SIZE);
+        byte[] cipheredMessage = Arrays.copyOfRange(payload, NONCE_SIZE, payload.length);
 
         // Deciphered payload
-        byte[] deciphered = cipher.doFinal(payload);
-        byte[] nonce = Arrays.copyOfRange(deciphered,0, NONCE_SIZE);
-        byte[] message = Arrays.copyOfRange(deciphered, NONCE_SIZE, deciphered.length);
+        cipher.init(Cipher.DECRYPT_MODE, keyCipher, createGcmIvForAes(nonce));
+        hmac.init(keyMac);
+
+        byte[] deciphered = cipher.doFinal(cipheredMessage);
+        byte[] message = Arrays.copyOfRange(deciphered, 0, deciphered.length);
         DataInputStream result = new DataInputStream(new ByteArrayInputStream(message));
 
         // Test MAC proof. Authenticity.
@@ -116,28 +122,12 @@ public class CipherService {
 
     /**
      * Creates an IV for a cipher with AES with GCM mode
-     * @param tagLen tag length
-     * @param messageNumber number of message to reduce the probability of generating the same IV
-     * @param random random number generator
      * @return IV for AES with GCM mode
      */
-    private static GCMParameterSpec createGcmIvForAes(int tagLen, int messageNumber, SecureRandom random) {
-        byte[] ivBytes = new byte[12];
-        random.nextBytes(ivBytes);
+    private static GCMParameterSpec createGcmIvForAes (byte[] nonce) {
+        byte[] ivBytes = Arrays.copyOf(nonce, 12);
 
-        // set the message number bytes
-        ivBytes[0] = (byte) (messageNumber >> 24);
-        ivBytes[1] = (byte) (messageNumber >> 16);
-        ivBytes[2] = (byte) (messageNumber >> 8);
-        ivBytes[3] = (byte) (messageNumber >> 0);
-
-        // set the counter bytes to 1
-        for (int i = 0; i != 3; i++) {
-            ivBytes[8 + i] = 0;
-        }
-
-        ivBytes[11] = 1;    // start at one
-        return new GCMParameterSpec(tagLen, ivBytes);
+        return new GCMParameterSpec(TAG_SIZE, ivBytes);
     }
 
     /**

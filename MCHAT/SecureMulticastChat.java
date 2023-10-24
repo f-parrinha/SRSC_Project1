@@ -6,10 +6,6 @@ import javax.crypto.*;
 
 public class SecureMulticastChat extends Thread {
 
-    // TODO - (version || CHAT_MAGIC_NUMBER || HASHED_USERNAME) || (NONCE || DATA) || HMACkey(mensagem anterior)
-
-
-
     // Definition of opcode for JOIN type
     public static final int JOIN = 1;
 
@@ -40,7 +36,6 @@ public class SecureMulticastChat extends Thread {
     // Control  - execution thread
 
     protected boolean isActive;
-
 
     protected CipherService cipherService;
 
