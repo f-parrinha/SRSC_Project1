@@ -22,6 +22,7 @@ public class CipherService {
     private final SecretKey keyMac;
     private final Cipher cipher;
     private final MessageDigest hash;
+    private final Mac hmac;
 
     public CipherService() throws NoSuchPaddingException, NoSuchAlgorithmException {
         // Load security file
@@ -31,35 +32,37 @@ public class CipherService {
             System.out.println(FILE_LOAD_ERROR);
         }
 
+        // Init variables
         secureRandomGenerator = new SecureRandom();
         keyCipher =  new SecretKeySpec(cipherKey.getBytes(), "AES");
         keyMac = new SecretKeySpec(hmacKey.getBytes(), "HmacSHA256");
         cipher = Cipher.getInstance("AES/GCM/NoPadding");
         hash = MessageDigest.getInstance("SHA256");
+        hmac =  Mac.getInstance("HmacSHA256");
     }
 
-    public byte[] createSecureMessage(Long magicNumber, String username, String message) throws NoSuchPaddingException,
-            NoSuchAlgorithmException, IllegalBlockSizeException, BadPaddingException,
-            InvalidAlgorithmParameterException, InvalidKeyException {
-
-        // Params
-        GCMParameterSpec gcmParam = createGcmIvForAes(128, 1, secureRandomGenerator);
-
-        Mac hmac =  Mac.getInstance("HmacSHA256");
+    public byte[] createSecureMessage(Long magicNumber, String username, String message) throws IllegalBlockSizeException,
+            BadPaddingException, InvalidAlgorithmParameterException, InvalidKeyException {
 
         // Initialization
+        GCMParameterSpec gcmParam = createGcmIvForAes(128, 1, secureRandomGenerator);
         cipher.init(Cipher.ENCRYPT_MODE, keyCipher, gcmParam);
         hmac.init(keyMac);
         byte[] hashedUser = hash.digest(Utils.toByteArray(username));
 
         // Message creation
-        System.out.println("CONTROL HEADER");
         byte[] controlHeader = concatArrays(Utils.toByteArray(Integer.toString(VERSION).concat(Long.toString(magicNumber))), hashedUser);
-        System.out.println("\nMEESSAGE PAYLOAD");
         byte[] chatMessagePayload = cipher.doFinal(Utils.toByteArray(secureRandomGenerator.toString().concat(message)));
-        System.out.println("\nMAC PROOF");
         byte[] macProof = hmac.doFinal(concatArrays(controlHeader, chatMessagePayload));
         return concatArrays(controlHeader, chatMessagePayload, macProof);
+    }
+
+    /**
+     * TODO
+     * @return
+     */
+    public String decriptSecureMessage() {
+
     }
 
     /**
@@ -98,12 +101,11 @@ public class CipherService {
         int counter = 0;
 
         for (byte[]array : arrays){
-            System.out.println("ARRAY: " + Arrays.toString(array));
             for (byte b : array) {
                 result[counter++] = b;
             }
         }
-        System.out.println("RESULT: " + Arrays.toString(result));
+
         return result;
     }
 

@@ -2,6 +2,7 @@
 import java.io.*;
 import java.net.*;
 import java.security.*;
+import java.util.Arrays;
 import javax.crypto.*;
 
 public class SecureMulticastChat extends Thread {
@@ -152,7 +153,8 @@ public class SecureMulticastChat extends Thread {
         dataStream.close();
 
         byte[] data = cipherService.createSecureMessage(CHAT_MAGIC_NUMBER, username, byteStream.toString());
-
+        System.out.println("\nSending");
+        System.out.println(Arrays.toString(data));
         DatagramPacket packet = new DatagramPacket(data, data.length, group,
                 msocket.getLocalPort());
         msocket.send(packet);
