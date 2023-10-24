@@ -44,8 +44,8 @@ public class SecureMulticastChat extends Thread {
     protected CipherService cipherService;
 
     // Multicast Chat-Messaging
-    public SecureMulticastChat(String username, InetAddress group, int port,
-                         int ttl, MulticastChatEventListener listener) throws IOException {
+    public SecureMulticastChat(String username, InetAddress group, int port, int ttl, MulticastChatEventListener listener)
+            throws IOException, NoSuchPaddingException, NoSuchAlgorithmException {
 
         this.username = username;
         this.group = group;

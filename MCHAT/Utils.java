@@ -3,6 +3,7 @@
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.SecureRandom;
+import java.util.Arrays;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
@@ -13,6 +14,7 @@ import javax.crypto.spec.IvParameterSpec;
  * Utilities
  */
 public class Utils extends UtilsBase {
+
     /**
      * Criacao de uma chave AES
      *
@@ -30,27 +32,6 @@ public class Utils extends UtilsBase {
         return generator.generateKey();
     }
 
-    public static GCMParameterSpec createGcmIvForAes(int tagLen, int messageNumber, SecureRandom random) {
-        byte[] ivBytes = new byte[12];
-
-        // initially randomize
-
-        random.nextBytes(ivBytes);
-
-        // set the message number bytes
-        ivBytes[0] = (byte) (messageNumber >> 24);
-        ivBytes[1] = (byte) (messageNumber >> 16);
-        ivBytes[2] = (byte) (messageNumber >> 8);
-        ivBytes[3] = (byte) (messageNumber >> 0);
-
-        // set the counter bytes to 1
-        for (int i = 0; i != 3; i++) {
-            ivBytes[8 + i] = 0;
-        }
-
-        ivBytes[11] = 1;    // start at one
-        return new GCMParameterSpec(tagLen, ivBytes);
-    }
     /**
      * Criar um IV para usar em AES e modo CTR
      * <p>
