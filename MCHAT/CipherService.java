@@ -1,13 +1,14 @@
 import javax.crypto.*;
 import javax.crypto.spec.IvParameterSpec;
-import java.io.BufferedReader;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.IOException;
+import javax.crypto.spec.SecretKeySpec;
+import javax.print.DocFlavor;
+import java.io.*;
 import java.security.*;
+import java.util.Arrays;
 
 public class CipherService {
     private static int VERSION = 1;     // Represents school's work phase
+    private static String FILE_LOAD_ERROR = "ERROR WHILE LOADING SECURITY FILE";
     private static String FILE_PATH = "./security.conf";
 
     private String hmacKey;
@@ -16,9 +17,45 @@ public class CipherService {
     private String hmacAlgorithm;
     private String hashAlgorithm;
 
+    public CipherService() {
+        readSecurityFile();
+
+        if (!checkFileReadCorrectly()) {
+            System.out.println(FILE_LOAD_ERROR);
+        }
+    }
+
+
+    // TODO convert to bytes instead of string
+    public byte[] createMessage(Long magicNumber, String username, String message) throws NoSuchPaddingException,
+            NoSuchAlgorithmException, IllegalBlockSizeException, BadPaddingException,
+            InvalidAlgorithmParameterException, InvalidKeyException {
+
+        // Params
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        MessageDigest hash = MessageDigest.getInstance("SHA256");
+        Mac hmac =  Mac.getInstance("HmacSHA256");
+        SecureRandom random = new SecureRandom();
+        SecretKey keyCipher =  new SecretKeySpec(cipherKey.getBytes(), cipher.getAlgorithm());
+        SecretKey keyMac = new SecretKeySpec(hmacKey.getBytes(), hmac.getAlgorithm());
+        IvParameterSpec iv =  Utils.createCtrIvForAES(1 , random);      // TODO check what is "1"
+
+        // Initialization
+        cipher.init(Cipher.ENCRYPT_MODE, keyCipher, iv);
+        hmac.init(keyMac);
+        String hashedUser = Arrays.toString(hash.digest(Utils.toByteArray(username)));
+
+        // Message creation
+        String controlHeader = Integer.toString(VERSION).concat(Long.toString(magicNumber)).concat(hashedUser);
+        String chatMessagePayload = Arrays.toString(cipher.doFinal(Utils.toByteArray(random.toString().concat(message))));
+        String macProof = Arrays.toString(hmac.doFinal(Utils.toByteArray(controlHeader.concat(chatMessagePayload))));
+
+        return controlHeader.concat(chatMessagePayload).concat(macProof).getBytes();
+    }
+
 
     /** Reads security.conf file to get security params */
-    public void readSecurityFile() {
+    private void readSecurityFile() {
         try (BufferedReader br = new BufferedReader(new FileReader(FILE_PATH))) {
             String line;
 
@@ -56,42 +93,10 @@ public class CipherService {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-
-        // Now you have the parameters stored in their respective variables
-        System.out.println("CONFIDENTIALITY: " + cipherAlgorithm);
-        System.out.println("CONFIDENTIALITY_KEY: " + cipherKey);
-        System.out.println("HASHFORNICKNAMES: " + hashAlgorithm);
-        System.out.println("MACKEY: " + hmacKey);
-        System.out.println("MACALGORITHM: " + hmacAlgorithm);
     }
 
-    // TODO convert to bytes instead of string
-    public byte[] createMessage(Long magicNumber, String username, String message) throws NoSuchPaddingException,
-            NoSuchAlgorithmException, IllegalBlockSizeException, BadPaddingException, NoSuchProviderException,
-            InvalidAlgorithmParameterException, InvalidKeyException {
-
-        // Params
-        SecureRandom random = new SecureRandom();
-        SecretKey key =  Utils.createKeyForAES(256, random);
-
-        // Cipher
-        IvParameterSpec iv =  Utils.createCtrIvForAES(1 , random);
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE, key, iv);
-
-        // Hashing
-        MessageDigest hash = MessageDigest.getInstance("SHA256");
-        String hashedUser = hash.digest(Utils.toByteArray(username)).toString();
-
-        // Mac
-        Mac hmac =  Mac.getInstance("HMAC-SHA256");
-
-
-        // Message creation
-        String controlHeader = Integer.toString(VERSION).concat(Long.toString(magicNumber)).concat(hashedUser);
-        String chatMessagePayload = cipher.doFinal(Utils.toByteArray(random.toString().concat(message))).toString();
-        String macProof = hmac.doFinal(Utils.toByteArray(controlHeader.concat(chatMessagePayload))).toString();
-
-        return controlHeader.concat(chatMessagePayload).concat(macProof).getBytes();
+    private Boolean checkFileReadCorrectly () {
+        return hmacKey != null && cipherKey != null && cipherAlgorithm != null && hmacAlgorithm != null && hashAlgorithm != null;
     }
+
 }

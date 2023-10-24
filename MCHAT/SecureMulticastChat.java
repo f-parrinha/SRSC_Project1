@@ -42,6 +42,8 @@ public class SecureMulticastChat extends Thread {
 
     protected boolean isActive;
 
+    protected CipherService cipherService;
+
     // Multicast Chat-Messaging
     public SecureMulticastChat(String username, InetAddress group, int port,
                          int ttl, MulticastChatEventListener listener) throws IOException {
@@ -62,9 +64,7 @@ public class SecureMulticastChat extends Thread {
         start();
         sendJoin();
 
-        CipherService service = new CipherService();
-
-        service.readSecurityFile();
+        cipherService = new CipherService();
     }
 
     /**
@@ -140,7 +140,8 @@ public class SecureMulticastChat extends Thread {
 
     // Send message to the chat-messaging room
     //
-    public void sendMessage(String message) throws IOException {
+    public void sendMessage(String message) throws IOException, InvalidAlgorithmParameterException, NoSuchPaddingException,
+            IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
 
         ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
         DataOutputStream dataStream = new DataOutputStream(byteStream);
@@ -151,7 +152,8 @@ public class SecureMulticastChat extends Thread {
         dataStream.writeUTF(message);
         dataStream.close();
 
-        byte[] data = byteStream.toByteArray();
+        byte[] data = cipherService.createMessage(CHAT_MAGIC_NUMBER, username, byteStream.toString());
+
         DatagramPacket packet = new DatagramPacket(data, data.length, group,
                 msocket.getLocalPort());
         msocket.send(packet);
