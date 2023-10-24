@@ -63,7 +63,9 @@ public class SecureMulticastChat extends Thread {
         start();
         sendJoin();
 
-        cipherService = new CipherService();
+        CipherFactory factory = new CipherFactory();
+
+        cipherService = factory.getCipher();
     }
 
     /**
