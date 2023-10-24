@@ -1,7 +1,7 @@
 import javax.crypto.*;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import javax.print.DocFlavor;
 import java.io.*;
 import java.security.*;
 import java.util.Arrays;
@@ -26,22 +26,22 @@ public class CipherService {
     }
 
 
-    // TODO convert to bytes instead of string
-    public byte[] createMessage(Long magicNumber, String username, String message) throws NoSuchPaddingException,
+
+    public byte[] createSecureMessage(Long magicNumber, String username, String message) throws NoSuchPaddingException,
             NoSuchAlgorithmException, IllegalBlockSizeException, BadPaddingException,
             InvalidAlgorithmParameterException, InvalidKeyException {
 
         // Params
+        SecureRandom random = new SecureRandom();
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         MessageDigest hash = MessageDigest.getInstance("SHA256");
         Mac hmac =  Mac.getInstance("HmacSHA256");
-        SecureRandom random = new SecureRandom();
-        SecretKey keyCipher =  new SecretKeySpec(cipherKey.getBytes(), cipher.getAlgorithm());
-        SecretKey keyMac = new SecretKeySpec(hmacKey.getBytes(), hmac.getAlgorithm());
-        IvParameterSpec iv =  Utils.createCtrIvForAES(1 , random);      // TODO check what is "1"
+        SecretKey keyCipher =  new SecretKeySpec(cipherKey.getBytes(), "AES");
+        SecretKey keyMac = new SecretKeySpec(hmacKey.getBytes(), "HmacSHA256");
+        GCMParameterSpec gcmParam = Utils.createGcmIvForAes(128, 1, random);
 
         // Initialization
-        cipher.init(Cipher.ENCRYPT_MODE, keyCipher, iv);
+        cipher.init(Cipher.ENCRYPT_MODE, keyCipher, gcmParam);
         hmac.init(keyMac);
         String hashedUser = Arrays.toString(hash.digest(Utils.toByteArray(username)));
 
@@ -49,8 +49,10 @@ public class CipherService {
         String controlHeader = Integer.toString(VERSION).concat(Long.toString(magicNumber)).concat(hashedUser);
         String chatMessagePayload = Arrays.toString(cipher.doFinal(Utils.toByteArray(random.toString().concat(message))));
         String macProof = Arrays.toString(hmac.doFinal(Utils.toByteArray(controlHeader.concat(chatMessagePayload))));
+        String finalMessage = controlHeader.concat(chatMessagePayload).concat(macProof);
 
-        return controlHeader.concat(chatMessagePayload).concat(macProof).getBytes();
+        System.out.println("SECURE MESSAGE TEST: " + finalMessage);
+        return finalMessage.getBytes();
     }
 
 

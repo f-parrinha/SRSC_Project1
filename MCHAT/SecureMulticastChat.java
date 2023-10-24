@@ -3,7 +3,6 @@ import java.io.*;
 import java.net.*;
 import java.security.*;
 import javax.crypto.*;
-import javax.crypto.spec.IvParameterSpec;
 
 public class SecureMulticastChat extends Thread {
 
@@ -152,7 +151,7 @@ public class SecureMulticastChat extends Thread {
         dataStream.writeUTF(message);
         dataStream.close();
 
-        byte[] data = cipherService.createMessage(CHAT_MAGIC_NUMBER, username, byteStream.toString());
+        byte[] data = cipherService.createSecureMessage(CHAT_MAGIC_NUMBER, username, byteStream.toString());
 
         DatagramPacket packet = new DatagramPacket(data, data.length, group,
                 msocket.getLocalPort());
